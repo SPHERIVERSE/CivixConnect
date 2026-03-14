@@ -6,31 +6,39 @@ import React, { useState, useRef, useEffect } from 'react';
 import axiosInstance from '../utils/axiosInstance'; 
 // NOTE: Make sure your axiosInstance import is correct (default or named)
 
-// --- 1. APP TRAINING CONTEXT (The Most Comprehensive Context for Swavi) ---
+// --- 1. APP CONTEXT (High-level platform + AI behaviour) ---
 const APP_DETAILS_CONTEXT = `
 SWACHH-VIKAS: An Integrated, Incentivized Waste Management Ecosystem.
 The platform is designed to close the 46% waste treatment gap by enforcing participation from citizens, waste workers, and ULBs. The AI assistant is named Swavi.
 
 USER ROLES & ACCESS:
 The application has four roles defined in the schema: ADMIN (ULB), WORKER, CITIZEN, and BUSINESS.
-- CITIZEN: Can Report Civic Issues, access gamified features (XP, Level, Leaderboard, Achievements), sell waste in the Marketplace, and access **Training Modules (Flashcards, Videos, Quizzes)**.
-- WORKER: Accesses Training, Leaderboard, and a TASKS module for assigned Civic Reports and waste collection routes.
+- CITIZEN: Can report Civic Issues, access gamified features (XP, Level, Leaderboard, Achievements), and sell waste in the Marketplace.
+- WORKER: Focuses on TASKS and real‑time locations for assigned Civic Reports and waste collection routes.
 - BUSINESS: Accesses CSR initiatives, manages Drives (waste collection events), and buys waste/places Bids in the Marketplace.
-- ADMIN (ULB): Manages all system components including Reports, Assets (Facilities), Users, and Training content.
+- ADMIN (ULB): Manages all system components including Reports, Assets (Facilities), Users, incentives and notifications.
 
 CORE MODULES & FUNCTIONALITY:
-1. MANDATORY TRAINING: Digital Certification & Monitoring. Enforces video training and an AwarenessQuiz model.
-2. CIVIC REPORTS / MONITORING: 
-    - Report Types: **illegal_dumping, open_toilet, dirty_toilet, overflow_dustbin, dead_animal, fowl, public_bin_request, public_toilet_request.**
+1. CIVIC REPORTS / MONITORING: 
+    - Report Types (enum ReportType): illegal_dumping, open_toilet, dirty_toilet, overflow_dustbin, dead_animal, fowl, public_bin_request, public_toilet_request,
+      and new smart infrastructure issues: POTHOLE, BROKEN_STREETLIGHT, ROAD_DAMAGE, WATER_LEAK, FALLEN_TREE, BROKEN_FOOTPATH.
     - Report Statuses: Reports follow a workflow: **pending, escalated, assigned (to a Worker), working, resolved.**
     - Citizen Engagement: Citizens can **Support or Oppose** a report to influence its priority (**supportCount, oppositionCount**).
     - Resolution: Workers resolve reports by providing a **resolvedImageUrl (photo proof)** and **resolvedNotes**.
     - Live Asset Tracking (Map): Displays real-time locations of Public Facilities (TOILET, BIN, WASTE_FACILITY) and Worker Locations.
-3. INCENTIVES & REWARDS: Citizens earn **XP and points** upon successful, QR-verified pickup of segregated waste. Points are redeemable for vouchers/discounts.
-4. MARKETPLACE (Waste-to-Wealth Integration - Bidding System):
+2. INCENTIVES & REWARDS: Citizens earn XP and CleanCoins which are redeemable for vouchers/discounts and rewards.
+3. MARKETPLACE (Waste-to-Wealth Integration - Bidding System):
     - CITIZENS (Sellers) create Listings of segregated waste (WasteType: PLASTIC, PAPER, METAL, GLASS, ORGANIC, ELECTRONIC, TEXTILE, OTHER).
     - BUSINESSES (Buyers) place Bids (BidStatus: PENDING).
     - CITIZENS (Sellers) can accept Bids (BidStatus: ACCEPTED) to finalize a deal.
+
+AI BEHAVIOUR (Swavi + backend Gemini pipeline):
+- Swavi should answer questions about: civic reports, AI triage/severity scores, duplicate detection, user roles, notifications, and marketplace basics.
+- The backend Gemini pipeline automatically:
+  * verifies incoming civic reports (flags likely spam),
+  * assigns a severityScore between 1 and 10 and a priority bucket (LOW, MEDIUM, HIGH),
+  * and clusters likely duplicates using geospatial proximity + text similarity.
+When unsure, Swavi should respond safely and avoid making up database state.
 `;
 // --- END CONTEXT ---
 

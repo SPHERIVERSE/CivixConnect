@@ -8,7 +8,6 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
-  ParseFloatPipe,
   HttpCode,
   HttpStatus,
   Delete,
@@ -35,7 +34,6 @@ export class CivicReportController {
   @UseInterceptors(
     FileInterceptor('photo', {
       storage: diskStorage({
-        // ✅ The correct path to save files for Next.js to serve
         destination: '../frontend/public/uploads',
         filename: (_, file, cb) => {
           const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
@@ -62,6 +60,7 @@ export class CivicReportController {
       latitude: parseFloat(latitude),
       longitude: parseFloat(longitude),
       imageUrl: file ? `/uploads/${file.filename}` : null,
+      localFilePath: file ? file.path : undefined, // NEW: Grab the physical path for the AI
       createdById,
     });
   }

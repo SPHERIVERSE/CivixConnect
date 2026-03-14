@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { Role, ReportType } from '@prisma/client';
+import { Role } from '@prisma/client';
 
 @Injectable()
 export class UserService {
@@ -11,16 +11,6 @@ export class UserService {
     return this.prisma.user.findMany({
       where: role ? { role } : {},
       include: {
-        moduleProgress: {
-          include: {
-            module: true,
-          },
-        },
-        courseCompletions: {
-          include: {
-            course: true,
-          },
-        },
         civicReports: true,
         posts: true,
         followers: true,
@@ -38,16 +28,6 @@ export class UserService {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: {
-        moduleProgress: {
-          include: {
-            module: true,
-          },
-        },
-        courseCompletions: {
-          include: {
-            course: true,
-          },
-        },
         civicReports: true,
         notifications: true,
         posts: true,
@@ -89,8 +69,6 @@ export class UserService {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: {
-        moduleProgress: true,
-        courseCompletions: true,
         civicReports: true,
         posts: true,
         reactions: true,
@@ -103,9 +81,6 @@ export class UserService {
       throw new NotFoundException('User not found');
     }
 
-    const completedModules = user.moduleProgress.filter(p => p.completed).length;
-    const totalModules = user.moduleProgress.length;
-    const completedCourses = user.courseCompletions.length;
     const reportsCreated = user.civicReports.length;
     const postsCreated = user.posts.length;
     const followersCount = user.followers.length;
@@ -114,14 +89,10 @@ export class UserService {
     return {
       ...user,
       stats: {
-        completedModules,
-        totalModules,
-        completedCourses,
         reportsCreated,
         postsCreated,
         followersCount,
         followingCount,
-        completionRate: totalModules > 0 ? (completedModules / totalModules) * 100 : 0,
       },
     };
   }
@@ -138,10 +109,6 @@ export class UserService {
         totalXp: true,
         role: true,
         createdAt: true,
-        moduleProgress: {
-          where: { completed: true },
-        },
-        courseCompletions: true,
         civicReports: true,
       },
       orderBy: { totalXp: 'desc' },
@@ -151,8 +118,6 @@ export class UserService {
     return users.map((user, index) => ({
       ...user,
       rank: index + 1,
-      completedModules: user.moduleProgress.length,
-      completedCourses: user.courseCompletions.length,
       reportsCreated: user.civicReports.length,
     }));
   }
@@ -188,43 +153,11 @@ export class UserService {
 
   // ✅ Send notification to user
   async sendNotificationToUser(userId: string, message: string, reportId?: string) {
-    // Find a default report for general notifications if none provided
-    let finalReportId = reportId;
-    
-    if (!finalReportId) {
-      // Get or create a system notification report
-      const systemReport = await this.prisma.civicReport.findFirst({
-        where: {
-          title: { contains: 'System Notification' },
-        },
-        select: { id: true },
-      });
-      
-      if (systemReport) {
-        finalReportId = systemReport.id;
-      } else {
-        // Create a system notification report if none exists
-        // Get any admin user to use as creator, or use the userId (which should be admin for notifications)
-        const createdReport = await this.prisma.civicReport.create({
-          data: {
-            title: 'System Notification',
-            description: 'This is a system notification placeholder',
-            type: ReportType.public_bin_request, // Use an existing type
-            latitude: 0,
-            longitude: 0,
-            createdById: userId, // Use admin user ID
-            status: 'resolved',
-          },
-        });
-        finalReportId = createdReport.id;
-      }
-    }
-
     return this.prisma.notification.create({
       data: {
         userId,
-        reportId: finalReportId,
         message,
+        ...(reportId && { reportId }), // Conditionally spread reportId if it exists
       },
     });
   }
@@ -239,8 +172,8 @@ export class UserService {
     return this.prisma.notification.createMany({
       data: users.map(user => ({
         userId: user.id,
-        reportId: reportId || '',
         message,
+        ...(reportId && { reportId }),
       })),
     });
   }
@@ -250,21 +183,7 @@ export class UserService {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
-    const [moduleProgress, courseCompletions, reports, posts] = await Promise.all([
-      this.prisma.userModuleProgress.findMany({
-        where: {
-          userId,
-          completedAt: { gte: startDate },
-        },
-        include: { module: true },
-      }),
-      this.prisma.courseCompletion.findMany({
-        where: {
-          userId,
-          completedAt: { gte: startDate },
-        },
-        include: { course: true },
-      }),
+    const [reports, posts] = await Promise.all([
       this.prisma.civicReport.findMany({
         where: {
           createdById: userId,
@@ -281,11 +200,9 @@ export class UserService {
 
     return {
       period: `${days} days`,
-      moduleProgress,
-      courseCompletions,
       reports,
       posts,
-      totalActivities: moduleProgress.length + courseCompletions.length + reports.length + posts.length,
+      totalActivities: reports.length + posts.length,
     };
   }
 }

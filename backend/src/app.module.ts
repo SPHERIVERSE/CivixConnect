@@ -4,7 +4,6 @@ import { PrismaModule } from './prisma/prisma.module';
 import { UserModule } from './user/user.module';
 import { AuthModule } from './auth/auth.module';
 import { SupabaseModule } from './supabase/supabase.module';
-import { TrainingModule } from './training/training.module';
 import { CivicReportModule } from './civic-report/civic-report.module';
 import { MapsModule } from './maps/maps.module';
 import { APP_PIPE } from '@nestjs/core';
@@ -22,7 +21,6 @@ import { CleanCoinModule } from './cleancoin/cleancoin.module';
     UserModule,
     AuthModule,
     SupabaseModule,
-    TrainingModule,
     CivicReportModule,
     MapsModule,
     CommunityModule,

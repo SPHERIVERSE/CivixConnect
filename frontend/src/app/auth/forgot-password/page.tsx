@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import api from '@/utils/axiosInstance';
-import { FaLock } from 'react-icons/fa';
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
@@ -24,27 +23,27 @@ export default function ForgotPasswordPage() {
     try {
       await api.post('/auth/send-otp', { phone });
       setOtpSent(true);
-      setMessage('OTP sent successfully!');
+      setMessage('Security token dispatched successfully!');
     } catch (err: any) {
-      setMessage(err.response?.data?.message || 'Failed to send OTP');
+      setMessage(err.response?.data?.message || 'Failed to dispatch token');
     } finally {
       setLoading(false);
     }
   };
 
   const verifyOtp = async () => {
-    if (!otp) return setMessage('Please enter OTP');
+    if (!otp) return setMessage('Please enter the security token');
     setLoading(true);
     try {
       const res = await api.post('/auth/verify-otp', { phone, token: otp });
       if (!res.data.success) {
-        setMessage('Invalid OTP');
+        setMessage('Invalid security token');
         return;
       }
       setOtpVerified(true);
-      setMessage('OTP verified! Now set your new password.');
+      setMessage('Token verified! Please configure your new access key.');
     } catch (err: any) {
-      setMessage(err.response?.data?.message || 'OTP verification failed');
+      setMessage(err.response?.data?.message || 'Token verification failed');
     } finally {
       setLoading(false);
     }
@@ -52,103 +51,111 @@ export default function ForgotPasswordPage() {
 
   const resetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!otpVerified) return setMessage('Please verify OTP first');
+    if (!otpVerified) return setMessage('Please verify identity token first');
     if (!newPassword || newPassword !== confirmPassword)
-      return setMessage('Passwords do not match');
+      return setMessage('Security keys do not match');
 
     setLoading(true);
     try {
       await api.post('/auth/reset-password', { phone, newPassword });
-      setMessage('Password reset successfully! Redirecting to login...');
+      setMessage('Access key reset successfully! Reinitializing login...');
       setTimeout(() => router.push('/auth/login'), 2000);
     } catch (err: any) {
-      setMessage(err.response?.data?.message || 'Failed to reset password');
+      setMessage(err.response?.data?.message || 'Failed to reset access key');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-gray-900 to-green-950 text-white">
-      <div className="max-w-2xl w-full space-y-8 p-10 backdrop-blur-md bg-white/10 rounded-3xl border border-gray-700 shadow-2xl transition-all duration-300 transform scale-95 hover:scale-100">
+    <div className="min-h-[80vh] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 relative">
+      
+      {/* Subtle Background Glow */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-cyan-600/10 rounded-full blur-[120px]"></div>
+      </div>
+
+      <div className="max-w-md w-full space-y-8 p-10 backdrop-blur-xl bg-slate-900/60 rounded-3xl border border-slate-800 shadow-[0_0_40px_rgba(0,0,0,0.5)] relative z-10 transition-all duration-300">
         <div className="text-center">
-          <div className="mx-auto h-20 w-20 bg-gradient-to-br from-green-600 to-blue-600 rounded-2xl flex items-center justify-center mb-6 shadow-lg">
-            <FaLock className="w-10 h-10 text-white" />
+          <div className="mx-auto h-16 w-16 bg-blue-900/30 border border-blue-500/30 rounded-2xl flex items-center justify-center mb-6 shadow-[0_0_20px_rgba(37,99,235,0.2)]">
+            <svg className="w-8 h-8 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
           </div>
-          <h2 className="text-4xl font-extrabold text-white">Reset Password</h2>
-          <p className="mt-2 text-gray-300 text-lg">Enter your phone number to reset your password</p>
+          <h2 className="text-3xl font-bold tracking-tight text-white">Recover Access</h2>
+          <p className="mt-2 text-slate-400 text-sm">Reset your security key via secure commlink</p>
         </div>
 
         <form className="space-y-6" onSubmit={resetPassword}>
-          <div className="space-y-4">
+          <div className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Registered Phone Number</label>
-              <div className="flex space-x-2">
+              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Registered Commlink (Phone)</label>
+              <div className="flex space-x-3">
                 <input
                   type="tel"
                   placeholder="+91 1234567890"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-700 bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-colors"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-700 bg-slate-950/50 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
                   required
                 />
                 <button
                   type="button"
                   onClick={sendOtp}
                   disabled={loading || otpSent}
-                  className="px-4 py-3 rounded-xl font-bold text-sm text-white bg-green-600 hover:bg-green-700 transition-colors disabled:opacity-50 whitespace-nowrap"
+                  className="px-5 py-3 rounded-xl font-semibold text-sm text-white bg-indigo-600 hover:bg-indigo-500 transition-colors disabled:opacity-50 whitespace-nowrap shadow-[0_0_15px_rgba(79,70,229,0.3)]"
                 >
-                  {loading ? 'Sending...' : otpSent ? 'Sent' : 'Send OTP'}
+                  {loading ? 'Transmitting...' : otpSent ? 'Dispatched' : 'Request Token'}
                 </button>
               </div>
             </div>
 
             {otpSent && !otpVerified && (
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Enter OTP</label>
-                <div className="flex space-x-2">
+              <div className="animate-in fade-in slide-in-from-top-4 duration-300">
+                <label className="block text-xs font-semibold text-cyan-400 uppercase tracking-wider mb-2">Input Security Token</label>
+                <div className="flex space-x-3">
                   <input
                     type="text"
-                    placeholder="Enter 6-digit OTP"
+                    placeholder="000000"
                     value={otp}
                     onChange={(e) => setOtp(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-700 bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-colors"
+                    className="w-full px-4 py-3 rounded-xl border border-cyan-700/50 bg-cyan-950/20 text-white placeholder-cyan-700 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-colors text-center tracking-widest text-lg font-mono"
                     maxLength={6}
                   />
                   <button
                     type="button"
                     onClick={verifyOtp}
                     disabled={loading}
-                    className="px-4 py-3 rounded-xl font-bold text-sm text-white bg-blue-600 hover:bg-blue-700 transition-colors disabled:opacity-50 whitespace-nowrap"
+                    className="px-5 py-3 rounded-xl font-semibold text-sm text-white bg-cyan-600 hover:bg-cyan-500 transition-colors disabled:opacity-50 whitespace-nowrap shadow-[0_0_15px_rgba(6,182,212,0.3)]"
                   >
-                    {loading ? 'Verifying...' : 'Verify'}
+                    {loading ? 'Verifying...' : 'Verify Token'}
                   </button>
                 </div>
               </div>
             )}
 
             {otpVerified && (
-              <>
+              <div className="animate-in fade-in slide-in-from-top-4 duration-300 space-y-5 pt-4 border-t border-slate-800">
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">New Password</label>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Configure New Key</label>
                   <input
                     type="password"
-                    placeholder="Enter new password"
+                    placeholder="••••••••"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-700 bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-colors"
+                    className="w-full px-4 py-3 rounded-xl border border-slate-700 bg-slate-950/50 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Confirm New Password</label>
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Confirm New Key</label>
                   <input
                     type="password"
-                    placeholder="Confirm new password"
+                    placeholder="••••••••"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-gray-700 bg-gray-800 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-colors"
+                    className="w-full px-4 py-3 rounded-xl border border-slate-700 bg-slate-950/50 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
                     required
                   />
                 </div>
@@ -156,30 +163,35 @@ export default function ForgotPasswordPage() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full py-4 rounded-xl font-bold text-lg text-white bg-green-600 hover:bg-green-700 transition-colors disabled:opacity-50 shadow-lg transform hover:scale-105"
+                  className="w-full py-4 rounded-xl font-semibold text-lg text-white bg-blue-600 hover:bg-blue-500 transition-all disabled:opacity-50 shadow-[0_0_15px_rgba(37,99,235,0.4)] hover:shadow-[0_0_25px_rgba(37,99,235,0.6)] flex justify-center items-center mt-6"
                 >
-                  {loading ? 'Resetting...' : 'Reset Password'}
+                  {loading ? (
+                    <span className="flex items-center gap-2">
+                      <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                      Configuring...
+                    </span>
+                  ) : 'Reset Security Key'}
                 </button>
-              </>
+              </div>
             )}
           </div>
 
           {message && (
-            <div className={`p-4 rounded-xl text-sm ${
-              message.includes('successful') || message.includes('verified')
-                ? 'bg-green-700 text-green-100 border border-green-600'
-                : 'bg-red-700 text-red-100 border border-red-600'
+            <div className={`p-4 rounded-xl text-sm border backdrop-blur-sm ${
+              message.includes('successful') || message.includes('verified') || message.includes('! Please')
+                ? 'bg-emerald-900/30 text-emerald-300 border-emerald-800'
+                : 'bg-red-900/30 text-red-300 border-red-800'
             }`}>
               {message}
             </div>
           )}
         </form>
 
-        <div className="text-center">
-          <p className="text-sm text-gray-400">
-            Remembered your password?{' '}
-            <Link href="/auth/login" className="text-green-400 hover:text-green-300 font-medium transition-colors">
-              Sign in here
+        <div className="text-center pt-4 border-t border-slate-800">
+          <p className="text-sm text-slate-500">
+            Remembered your credentials?{' '}
+            <Link href="/auth/login" className="text-cyan-400 hover:text-cyan-300 font-medium transition-colors">
+              Initialize session
             </Link>
           </p>
         </div>
@@ -187,4 +199,3 @@ export default function ForgotPasswordPage() {
     </div>
   );
 }
-

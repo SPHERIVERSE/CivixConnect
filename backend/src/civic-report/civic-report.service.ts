@@ -7,9 +7,9 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-// Ensure all required enums are imported
 import { ReportType, ReportStatus, Role, TransactionSource } from '@prisma/client';
 import { CleanCoinService } from '../cleancoin/cleancoin.service';
+import { GeminiService } from '../gemini/gemini.service';
 
 @Injectable()
 export class CivicReportService {
@@ -17,6 +17,8 @@ export class CivicReportService {
     private prisma: PrismaService,
     @Inject(forwardRef(() => CleanCoinService))
     private cleanCoinService: CleanCoinService,
+    @Inject(forwardRef(() => GeminiService))
+    private geminiService: GeminiService,
   ) {}
 
   async createReport(data: {
@@ -24,6 +26,7 @@ export class CivicReportService {
     description?: string;
     type: ReportType;
     imageUrl?: string | null;
+    localFilePath?: string; // NEW parameter
     latitude: number;
     longitude: number;
     createdById: string;
@@ -46,7 +49,82 @@ export class CivicReportService {
       },
     });
 
-    return this.formatReportResponse(report, data.createdById);
+    // Enrich the report with AI analysis
+    try {
+      const analysis = await this.geminiService.analyzeCivicReport({
+        title: report.title,
+        description: report.description,
+        type: report.type,
+        latitude: report.latitude,
+        longitude: report.longitude,
+        localFilePath: data.localFilePath, // Pass the path to Gemini
+      });
+
+      const radius = 0.001; 
+      const nearby = await this.prisma.civicReport.findMany({
+        where: {
+          id: { not: report.id },
+          latitude: { gte: report.latitude - radius, lte: report.latitude + radius },
+          longitude: { gte: report.longitude - radius, lte: report.longitude + radius },
+        },
+        take: 10,
+      });
+
+      let canonicalId: string | null = null;
+      let bestScore = 0;
+
+      for (const candidate of nearby) {
+        const score = await this.geminiService.compareCivicReports({
+          existing: {
+            title: candidate.title,
+            description: candidate.description,
+            type: candidate.type,
+          },
+          incoming: {
+            title: report.title,
+            description: report.description,
+            type: report.type,
+          },
+        });
+
+        if (score > 0.8 && score > bestScore) {
+          bestScore = score;
+          canonicalId = candidate.canonicalReportId || candidate.id;
+        }
+      }
+
+      const isValidType = Object.values(ReportType).includes(analysis.detectedType as ReportType);
+      const safeDetectedType = isValidType ? (analysis.detectedType as ReportType) : null;
+
+      const updated = await this.prisma.civicReport.update({
+        where: { id: report.id },
+        data: {
+          aiDetectedType: safeDetectedType,
+          aiConfidence: analysis.confidence,
+          aiSeverityScore: analysis.severityScore,
+          aiPriority: analysis.priority,
+          aiSummary: analysis.summary,
+          aiFlaggedAsSpam: analysis.flaggedAsSpam,
+          canonicalReportId: canonicalId,
+        },
+        include: {
+          createdBy: { select: { id: true, name: true, role: true } },
+          supports: true,
+        },
+      });
+
+      if (canonicalId) {
+        await this.prisma.civicReport.update({
+          where: { id: canonicalId },
+          data: { duplicateCount: { increment: 1 } },
+        });
+      }
+
+      return this.formatReportResponse(updated, data.createdById);
+    } catch (error) {
+      console.error('AI enrichment for civic report failed:', error);
+      return this.formatReportResponse(report, data.createdById);
+    }
   }
 
   async getAllReports(currentUserId: string) {
@@ -90,7 +168,6 @@ export class CivicReportService {
     return reports.map((report) => this.formatReportResponse(report, userId));
   }
   
-  // Add this new method to the CivicReportService class
   async withdrawReport(reportId: string, userId: string) {
     const report = await this.prisma.civicReport.findUnique({
       where: { id: reportId },
@@ -149,7 +226,7 @@ export class CivicReportService {
     }
 
     const existing = await this.prisma.civicReportSupport.findUnique({
-      where: { reportId_userId: { reportId, userId } }, // ✅ Correct usage
+      where: { reportId_userId: { reportId, userId } }, 
     });
 
     if (existing) {
@@ -165,7 +242,6 @@ export class CivicReportService {
       data: { supportCount: { increment: 1 } },
     });
 
-    // Award CleanCoins for support vote (+2 CC, once per report)
     try {
       const hasEarned = await this.cleanCoinService.hasEarnedForAction(
         userId,
@@ -183,7 +259,6 @@ export class CivicReportService {
         );
       }
     } catch (error) {
-      // Log error but don't fail the vote
       console.error('Failed to award CleanCoins for support vote:', error);
     }
 
@@ -202,7 +277,7 @@ export class CivicReportService {
     }
 
     const existing = await this.prisma.civicReportSupport.findUnique({
-      where: { reportId_userId: { reportId, userId } }, // ✅ Correct usage
+      where: { reportId_userId: { reportId, userId } }, 
     });
 
     if (existing) {
@@ -241,11 +316,11 @@ export class CivicReportService {
       where: { reportId, support: true },
     });
 
-    const threshold = 5; // ⚡ configurable if needed
+    const threshold = 5; 
     if (supportCount >= threshold) {
       const updated = await this.prisma.civicReport.update({
         where: { id: reportId },
-        data: { status: ReportStatus.escalated }, // Use enum constant
+        data: { status: ReportStatus.escalated }, 
       });
 
       const admins = await this.prisma.user.findMany({ where: { role: Role.ADMIN } });
@@ -264,7 +339,6 @@ export class CivicReportService {
     const report = await this.prisma.civicReport.findUnique({ where: { id: reportId } });
     if (!report) throw new NotFoundException('Report not found');
 
-    // Allow assignment only for cleaning/pickup related issues
     const infraTypes: ReportType[] = [
       ReportType.public_bin_request,
       ReportType.public_toilet_request,
@@ -291,7 +365,6 @@ export class CivicReportService {
       include: { createdBy: true },
     });
 
-    // Notify the assigned worker
     await this.prisma.notification.create({
       data: {
         userId: nearest.workerId,
@@ -300,7 +373,6 @@ export class CivicReportService {
       },
     });
 
-    // Notify the citizen who created the report
     await this.prisma.notification.create({
       data: {
         userId: updated.createdById,
@@ -319,7 +391,7 @@ export class CivicReportService {
 
     const updated = await this.prisma.civicReport.update({
       where: { id: reportId },
-      data: { resolvedImageUrl: imageUrl, resolvedNotes: notes ?? null }, // Changed undefined to null for safety
+      data: { resolvedImageUrl: imageUrl, resolvedNotes: notes ?? null }, 
       include: { createdBy: true },
     });
 
@@ -336,20 +408,18 @@ export class CivicReportService {
     return updated;
   }
 
-  // 👇 FIX: This method now updates status and returns the report
   async workerMarkResolved(reportId: string, workerId: string) {
     const report = await this.prisma.civicReport.findUnique({ where: { id: reportId } });
     if (!report) throw new NotFoundException('Report not found');
     if (report.assignedToWorkerId !== workerId) throw new ForbiddenException('Not assigned to you');
     if (!report.resolvedImageUrl) throw new BadRequestException('Upload resolution photo first');
 
-    // Update status to 'escalated' to signal Admin review, if it's currently 'assigned'
     let updatedReport = report;
     if (report.status === ReportStatus.assigned) {
         updatedReport = await this.prisma.civicReport.update({
             where: { id: reportId },
             data: { 
-                status: ReportStatus.escalated, // Using escalated as a 'ready for review' status
+                status: ReportStatus.escalated, 
             },
             include: { createdBy: true },
         });
@@ -368,9 +438,7 @@ export class CivicReportService {
     return updatedReport;
   }
   
-  // 👇 FIX: This method now correctly implements admin confirmation logic
   async adminConfirmResolution(reportId: string, adminId: string) {
-    // 1. Fetch the report to get the creator's ID for notification
     const report = await this.prisma.civicReport.findUnique({ 
       where: { id: reportId },
       select: { id: true, title: true, createdById: true, status: true },
@@ -384,28 +452,16 @@ export class CivicReportService {
         throw new BadRequestException('Report is already officially resolved.');
     }
 
-    // 2. Update the report status to 'resolved' and record the Admin who confirmed it
-    // NOTE: Your schema doesn't seem to have adminConfirmedAt/adminConfirmedById, 
-    // but the final status change is the crucial step.
+    // 1. Mark the report as resolved
     const updated = await this.prisma.civicReport.update({
       where: { id: reportId },
       data: { 
-          status: ReportStatus.resolved, // FINAL STATUS
-          // data: { adminConfirmedAt: new Date(), adminConfirmedById: adminId } // Add these fields to schema for auditing
+          status: ReportStatus.resolved, 
       },
       include: { createdBy: true },
     });
 
-    // 3. Notify the Citizen who reported the issue
-    await this.prisma.notification.create({
-      data: {
-        userId: updated.createdById, // Use the original citizen's ID
-        reportId,
-        message: `✅ Your report "${updated.title}" has been officially RESOLVED and confirmed by the administration. Thank you!`,
-      },
-    });
-
-    // Award CleanCoins to the citizen who reported (+25 CC)
+    // 2. Handle Rewards & Notifications
     try {
       const hasEarned = await this.cleanCoinService.hasEarnedForAction(
         updated.createdById,
@@ -414,23 +470,45 @@ export class CivicReportService {
       );
       
       if (!hasEarned) {
+        // Award 50 CleanCoins
         await this.cleanCoinService.awardCoins(
           updated.createdById,
-          25,
+          50, // Updated to 50
           TransactionSource.REPORT_RESOLUTION,
           `Report resolved: ${updated.title}`,
           { reportId }
         );
+
+        // Award 100 XP for the leaderboard
+        await this.prisma.user.update({
+          where: { id: updated.createdById },
+          data: { totalXp: { increment: 100 } }
+        });
+
+        // Send the congratulatory notification WITH the reward amounts
+        await this.prisma.notification.create({
+          data: {
+            userId: updated.createdById, 
+            reportId,
+            message: `✅ Your report "${updated.title}" was resolved! You earned 50 CleanCoins and 100 XP. Thank you for keeping the city smart!`,
+          },
+        });
+      } else {
+        // Fallback notification if they somehow already got the reward
+        await this.prisma.notification.create({
+          data: {
+            userId: updated.createdById, 
+            reportId,
+            message: `✅ Your report "${updated.title}" has been officially RESOLVED by the administration.`,
+          },
+        });
       }
     } catch (error) {
-      // Log error but don't fail the resolution
-      console.error('Failed to award CleanCoins for report resolution:', error);
+      console.error('Failed to award CleanCoins/XP for report resolution:', error);
     }
 
     return updated;
   }
-  
-  // ... (rest of the methods)
   
   async getAssignedToWorker(workerId: string) {
     const reports = await this.prisma.civicReport.findMany({
@@ -447,6 +525,12 @@ export class CivicReportService {
     const infraTypes: ReportType[] = [
       ReportType.public_bin_request,
       ReportType.public_toilet_request,
+      ReportType.POTHOLE,
+      ReportType.BROKEN_STREETLIGHT,
+      ReportType.ROAD_DAMAGE,
+      ReportType.WATER_LEAK,
+      ReportType.FALLEN_TREE,
+      ReportType.BROKEN_FOOTPATH
     ];
     if (!infraTypes.includes(report.type)) {
       throw new BadRequestException('Only infrastructure requests can be marked as working without assignment');
@@ -454,7 +538,7 @@ export class CivicReportService {
 
     const updated = await this.prisma.civicReport.update({
       where: { id: reportId },
-      data: { status: ReportStatus.working }, // ✅ FIX: Use 'working' status instead of 'assigned'
+      data: { status: ReportStatus.working }, 
       include: { createdBy: true },
     });
 
@@ -462,7 +546,7 @@ export class CivicReportService {
       data: {
         userId: updated.createdById,
         reportId,
-        message: `Your infrastructure request is being worked on: ${updated.title}`,
+        message: `City authorities have begun working on your reported issue: ${updated.title}`,
       },
     });
 
@@ -470,11 +554,10 @@ export class CivicReportService {
   }
 
   async getNotifications(userId: string) {
-    // Return recent notifications (both read and unread) for better UX
     return this.prisma.notification.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
-      take: 50, // Increased limit to show more history
+      take: 50, 
     });
   }
 

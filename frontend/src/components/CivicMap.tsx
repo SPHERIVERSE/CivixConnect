@@ -87,8 +87,40 @@ const getFacilityIcon = (type: string) => {
   });
 };
 
-// Custom icon for a report (red exclamation mark)
-const reportIcon = createDivIcon('red', 'M256 32c142.4 0 256 114.6 256 256S398.4 544 256 544 0 429.4 0 288 114.6 32 256 32zm-16 144v144h32V176h-32zm0 192v32h32v-32h-32z');
+// Base icon paths for different civic issues
+const TRIANGLE_PATH = 'M256 32L32 480h448L256 32z';
+const BULB_PATH =
+  'M192 0C121 0 64 57 64 128c0 47 26 88 64 110v50c0 8.8 7.2 16 16 16h16v32h64v-32h16c8.8 0 16-7.2 16-16v-50c38-22 64-63 64-110C320 57 263 0 192 0z';
+const DROP_PATH =
+  'M256 0C192 96 160 144 160 192c0 53 43 96 96 96s96-43 96-96c0-48-32-96-96-192z';
+
+// Default report icon (generic civic pin)
+const defaultReportIcon = createDivIcon(
+  'red',
+  'M256 32c142.4 0 256 114.6 256 256S398.4 544 256 544 0 429.4 0 288 114.6 32 256 32zm-16 144v144h32V176h-32zm0 192v32h32v-32h-32z',
+);
+
+// Icons for new smart civic infrastructure issues
+const potholeIcon = createDivIcon('red', TRIANGLE_PATH);
+const streetlightIcon = createDivIcon('yellow', BULB_PATH);
+const waterLeakIcon = createDivIcon('blue', DROP_PATH);
+
+const getReportIconForType = (type: string) => {
+  switch (type) {
+    case 'POTHOLE':
+    case 'ROAD_DAMAGE':
+      return potholeIcon;
+    case 'BROKEN_STREETLIGHT':
+      return streetlightIcon;
+    case 'WATER_LEAK':
+      return waterLeakIcon;
+    case 'FALLEN_TREE':
+    case 'BROKEN_FOOTPATH':
+      return potholeIcon;
+    default:
+      return defaultReportIcon;
+  }
+};
 
 // Other icons
 const workerIcon = L.icon({
@@ -174,7 +206,7 @@ const CivicMap = ({
         <Marker
           key={report.id}
           position={[report.latitude, report.longitude]}
-          icon={reportIcon}
+          icon={getReportIconForType(report.type)}
         >
           <Popup maxWidth={300} minWidth={250}>
             <ReportCard

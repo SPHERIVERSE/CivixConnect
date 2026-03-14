@@ -62,28 +62,38 @@ export default function WorkerDashboard() {
       });
       setCurrentUserId(userRes.data.id);
 
-      const res = await api.get('/training/user/progress', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const progress = res.data;
-      setUserStats({
-        level: progress.level || 1,
-        xp: progress.xp || 0,
-        xpToNext: progress.xpToNext || 100,
-        streak: progress.streak || 0,
-        completedModules: progress.completedModules || 0,
-        totalModules: progress.totalModules || 0,
-        achievements: progress.achievements || [],
-      });
+      // Training services have been deprecated in the backend.
+      // Try to fetch progress/leaderboard, but gracefully fall back if unavailable.
+      try {
+        const res = await api.get('/training/user/progress', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const progress = res.data;
+        setUserStats({
+          level: progress.level || 1,
+          xp: progress.xp || 0,
+          xpToNext: progress.xpToNext || 100,
+          streak: progress.streak || 0,
+          completedModules: progress.completedModules || 0,
+          totalModules: progress.totalModules || 0,
+          achievements: progress.achievements || [],
+        });
+      } catch (err) {
+        console.warn('Worker training progress endpoint unavailable, using defaults.', err);
+      }
 
-      const rankRes = await api.get('/training/leaderboard/me', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setUserRank(rankRes.data);
+      try {
+        const rankRes = await api.get('/training/leaderboard/me', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setUserRank(rankRes.data);
+      } catch (err) {
+        console.warn('Worker training leaderboard endpoint unavailable, skipping rank.', err);
+      }
 
       setError('');
     } catch (err: any) {
-      setError('Failed to load progress data');
+      setError('Failed to load dashboard');
     } finally {
       setLoading(false);
     }
@@ -382,7 +392,7 @@ export default function WorkerDashboard() {
             {/* Training Modules */}
             <div
               className="bg-white/10 backdrop-blur-xl rounded-3xl p-8 border border-white/20 shadow-2xl cursor-pointer group hover:scale-105 transition-all duration-500 hover:shadow-3xl"
-              onClick={() => router.push('/auth/dashboard/worker/training')}
+              onClick={() => router.push('/auth/dashboard/worker/tasks')}
             >
               <div className="flex items-center justify-between mb-6">
                 <div>
