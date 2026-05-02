@@ -228,7 +228,7 @@ const AdminReportPage = () => {
                 onChange={(e) => setStatusFilter(e.target.value as any)}
                 className='bg-gray-900 border border-gray-600 text-gray-200 text-sm rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 outline-none'
               >
-                <option value='ALL'>All Statuses</option>
+                <option value='ALL'>All Status</option>
                 <option value='pending'>Pending</option>
                 <option value='escalated'>Escalated (Threshold Met)</option>
                 <option value='assigned'>Assigned to Worker</option>
